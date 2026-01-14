@@ -41,14 +41,13 @@ mongoose.connect(process.env.MONGO_URL)
 
 app.use(cors({
   origin: "https://cloud-vault-frontend-98mf.onrender.com",
-  methods: ["GET", "POST", "DELETE"],
+  methods: ["GET", "POST", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true
 }));
 
-app.options("*", cors({
-  origin: "https://cloud-vault-frontend-98mf.onrender.com",
-  credentials: true
-}));
+app.options("*", cors());
+
 
 
 app.use(express.json());
