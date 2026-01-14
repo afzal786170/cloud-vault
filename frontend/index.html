@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cloud Vault</title>
+
+<link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<div class="container">
+
+<div id="loginBox" class="auth-card">
+<h2>Welcome</h2>
+
+<input type="email" id="email" placeholder="Email">
+<input type="password" id="password" placeholder="Password">
+<button class="primary" onclick="login()">Login</button>
+
+<div class="divider">or</div>
+
+<input id="rEmail" placeholder="Email">
+<input id="rPassword" placeholder="Password">
+<button class="secondary" onclick="register()">Register</button>
+</div>
+
+<div id="app" style="display:none;">
+
+<header class="topbar">
+<h2>Cloud Vault</h2>
+<div>
+<button onclick="toggleTheme()">🌙</button>
+<button class="danger" onclick="logout()">Logout</button>
+<button class="danger" onclick="deleteAccount()">Delete Account</button>
+
+</div>
+</header>
+
+<section class="card upload-box">
+
+<label class="upload-btn">
+📄 Upload File
+<input type="file" id="fileInput" hidden>
+</label>
+
+<label class="upload-btn">
+📁 Upload Folder
+<input type="file" id="folderInput" webkitdirectory multiple hidden>
+</label>
+
+<button class="primary" onclick="upload()">Upload</button>
+
+<div id="progressWrap" style="display:none; margin-top:10px;">
+<div style="background:#e5e7eb; border-radius:6px; overflow:hidden;">
+<div id="progressBar" style="height:8px; width:0%; background:#2563eb;"></div>
+</div>
+<small id="progressText">0%</small>
+</div>
+
+</section>
+
+<section class="card">
+<h3>Files</h3>
+<div id="gallery"></div>
+</section>
+
+<section class="card">
+<h3>Voice Recorder</h3>
+<button onclick="startRecording()">🎙 Start</button>
+<button onclick="stopRecording()">⏹ Stop</button>
+<audio id="player" controls></audio>
+</section>
+
+<section class="card">
+<h3>Text / Code</h3>
+<textarea id="textInput"></textarea>
+<button class="primary" onclick="uploadText()">Save</button>
+<div id="textList"></div>
+</section>
+
+
+
+<section class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center;">
+    <h3>Activity Log</h3>
+
+    <button class="danger" onclick="clearLogs()">Clear</button>
+  </div>
+  <ul id="logList"></ul>
+</section>
+
+</section>
+
+</div>
+</div>
+
+</body>
+
+
+
+<script>
+
+    function authHeaders() {
+  return {
+    Authorization: "Bearer " + localStorage.getItem("token")
+  };
+}
+
+async function register() {
+  const emailInput = document.getElementById("rEmail");
+  const passwordInput = document.getElementById("rPassword");
+
+  const res = await fetch("http://localhost:5000/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email: emailInput.value,
+      password: passwordInput.value
+    })
+  });
+
+  if (res.ok) {
+    alert("Registered! Now login.");
+
+    // ✅ CLEAR INPUTS
+    emailInput.value = "";
+    passwordInput.value = "";
+
+  } else {
+    alert("User already exists");
+  }
+}
+
+
+
+    let deleteTarget = null;
+async function upload() {
+  const single = document.getElementById("fileInput");
+  const folder = document.getElementById("folderInput");
+
+  const files =
+    single.files.length ? single.files :
+    folder.files.length ? folder.files :
+    [];
+
+  if (!files.length) {
+    alert("Select a file or folder");
+    return;
+  }
+
+  const progressWrap = document.getElementById("progressWrap");
+  const progressBar = document.getElementById("progressBar");
+  const progressText = document.getElementById("progressText");
+
+  progressWrap.style.display = "block";
+  progressBar.style.width = "0%";
+  progressText.innerText = "0%";
+
+  let uploaded = 0;
+
+  for (const file of files) {
+    await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      const data = new FormData();
+
+      data.append("file", file);
+      data.append("path", file.webkitRelativePath || file.name);
+
+      xhr.open("POST", "http://localhost:5000/upload");
+      xhr.setRequestHeader("Authorization", "Bearer " + localStorage.getItem("token"));
+
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const percent = Math.round((e.loaded / e.total) * 100);
+          progressBar.style.width = percent + "%";
+          progressText.innerText = percent + "%";
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status === 200) {
+          uploaded++;
+          progressBar.style.width = "100%";
+          progressText.innerText = "Uploaded " + uploaded + "/" + files.length;
+          resolve();
+        } else {
+          reject();
+        }
+      };
+
+      xhr.onerror = reject;
+      xhr.send(data);
+    });
+  }
+
+  progressText.innerText = "Completed ✅";
+
+  setTimeout(() => {
+    progressWrap.style.display = "none";
+  }, 1200);
+
+  single.value = "";
+  folder.value = "";
+
+  loadFiles();
+  loadLogs();
+}
+
+
+
+
+ 
+
+
+
+let mediaRecorder;
+let audioChunks = [];
+
+async function startRecording() {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  mediaRecorder = new MediaRecorder(stream);
+  mediaRecorder.start();
+
+  audioChunks = [];
+  mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+}
+
+async function stopRecording() {
+  mediaRecorder.stop();
+
+ 
+
+  mediaRecorder.onstop = async () => {
+    const blob = new Blob(audioChunks, { type: "audio/webm" });
+    document.getElementById("player").src = URL.createObjectURL(blob);
+
+    const data = new FormData();
+    data.append("file", blob, "voice.webm");
+
+  const res = await fetch("http://localhost:5000/upload", {
+  method: "POST",
+  headers: authHeaders(),   // 👈 STEP 9
+  body: data
+});
+
+    
+    const result = await res.json();
+    alert("Voice Uploaded!\n" + result.url);
+    loadFiles();   // ✅
+loadLogs();    // ✅
+  };
+}
+
+
+   
+
+
+async function loadFiles() {
+ const res = await fetch("http://localhost:5000/files", {
+  headers: authHeaders()   // 👈 STEP 9
+});
+  const files = await res.json();
+
+  if (!Array.isArray(files)) return;
+
+
+  const gallery = document.getElementById("gallery");
+  gallery.innerHTML = "";
+
+ files.slice().reverse().forEach(file => {
+
+  // IMAGE
+  if (file.type === "image") {
+    gallery.innerHTML += `
+      <div class="card">
+        <img src="${file.url}">
+          <small>${file.path}</small>
+          <small>
+  ${formatSize(file.size)} • ${formatDate(file.createdAt)}
+</small>
+
+        <a href="${file.url}" download target="_blank">Download</a>
+        <button onclick="deleteFile('${file.public_id}')">Delete</button>
+      </div>
+    `;
+  }
+
+  // VIDEO
+  else if (file.type === "video") {
+    gallery.innerHTML += `
+      <div class="card">
+        <video src="${file.url}" controls></video>
+        <small>
+  ${formatSize(file.size)} • ${formatDate(file.createdAt)}
+</small>
+
+        <a href="${file.url}" download target="_blank">Download</a>
+        <button onclick="deleteFile('${file.public_id}')">Delete</button>
+      </div>
+    `;
+  }
+
+  // AUDIO
+  else if (file.type === "audio") {
+    gallery.innerHTML += `
+      <div class="card">
+        <audio src="${file.url}" controls></audio>
+        <small>
+  ${formatSize(file.size)} • ${formatDate(file.createdAt)}
+</small>
+
+        <a href="${file.url}" download target="_blank">Download</a>
+        <button onclick="deleteFile('${file.public_id}')">Delete</button>
+      </div>
+    `;
+  }
+ else {
+  gallery.innerHTML += `
+    <div class="card">
+      <p>📦 ${file.format || "File"}</p>
+      <small>${file.path}</small>
+      <small>
+  ${formatSize(file.size)} • ${formatDate(file.createdAt)}
+</small>
+
+      <a href="${file.url}?dl=1" download>Download</a>
+      <button onclick="deleteFile('${file.public_id}')">Delete</button>
+    </div>
+  `;
+}
+
+
+
+});
+
+}
+
+
+
+function deleteFile(public_id) {
+  deleteTarget = public_id;
+  document.getElementById("confirmBox").style.display = "block";
+}
+
+async function confirmYes() {
+ await fetch(`http://localhost:5000/delete/${deleteTarget}`, {
+  method: "DELETE",
+  headers: authHeaders()   // 👈 STEP 9
+});
+
+
+  deleteTarget = null;
+  document.getElementById("confirmBox").style.display = "none";
+  loadFiles();
+   loadLogs();    // ✅ ADD THIS
+}
+
+function confirmNo() {
+  deleteTarget = null;
+  document.getElementById("confirmBox").style.display = "none";
+}
+
+
+function toggleTheme() {
+  document.body.classList.toggle("dark");
+}
+
+
+async function uploadText() {
+  const content = document.getElementById("textInput").value;
+
+  if (!content) return alert("Write something first");
+
+  await fetch("http://localhost:5000/text", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders()
+    },
+    body: JSON.stringify({ content })
+  });
+
+  document.getElementById("textInput").value = "";
+  loadTexts();
+}
+
+
+async function loadTexts() {
+  const res = await fetch("http://localhost:5000/texts", {
+    headers: authHeaders(),
+    cache: "no-store"
+  });
+
+  const texts = await res.json();
+
+  if (!Array.isArray(texts)) return; // 🔥 MOST IMPORTANT LINE
+
+  const box = document.getElementById("textList");
+  box.innerHTML = "";
+
+  texts.slice().reverse().forEach(t => {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const pre = document.createElement("pre");
+    pre.textContent = t.content;
+
+    const copyBtn = document.createElement("button");
+    copyBtn.innerText = "Copy";
+    copyBtn.onclick = () => copyText(t.content);
+
+    const delBtn = document.createElement("button");
+    delBtn.innerText = "Delete";
+    delBtn.onclick = () => deleteText(t._id);
+
+
+    card.append(pre, copyBtn, delBtn);
+    box.appendChild(card);
+  });
+}
+
+
+
+function copyText(text) {
+  navigator.clipboard.writeText(text);
+  alert("Copied!");
+}
+
+async function deleteText(id) {
+  await fetch(`http://localhost:5000/text/${id}`, {
+    method: "DELETE",
+    headers: authHeaders()
+  });
+  loadTexts();
+}
+
+
+
+
+
+async function login() {
+  const email = document.getElementById("email").value;
+  const password = document.getElementById("password").value;
+
+  const res = await fetch("http://localhost:5000/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password })
+  });
+
+if (res.status === 401) {
+  alert("Invalid credentials");
+  return;
+}
+
+  const data = await res.json();
+
+  if (data.token) {
+    localStorage.setItem("token", data.token);
+    showApp();
+  } else {
+    alert("Invalid login");
+  }
+}
+
+
+
+
+function showApp() {
+  document.getElementById("loginBox").style.display = "none";
+  document.getElementById("app").style.display = "block";
+  loadFiles();
+  loadLogs();
+  loadTexts();
+
+}
+
+
+if (localStorage.getItem("token")) {
+  showApp();
+}
+
+
+
+
+async function loadLogs() {
+ const res = await fetch("http://localhost:5000/logs", {
+  headers: authHeaders()   // 👈 STEP 9
+});
+
+  const logs = await res.json();
+
+  if (!Array.isArray(logs)) return;
+
+
+  const list = document.getElementById("logList");
+  list.innerHTML = "";
+
+  logs.slice().reverse().forEach(log => {
+    list.innerHTML += `
+      <li>
+        ${log.action} — ${new Date(log.time).toLocaleString()}
+      </li>
+    `;
+  });
+}
+
+
+
+async function clearLogs() {
+  const confirmClear = confirm("Are you sure you want to clear all logs?");
+  if (!confirmClear) return;
+
+  await fetch("http://localhost:5000/logs/clear", {
+    method: "DELETE",
+    headers: authHeaders()
+  });
+
+  loadLogs();
+}
+
+function formatSize(bytes) {
+  if (!bytes) return "";
+  return (bytes / (1024 * 1024)).toFixed(2) + " MB";
+}
+
+function formatDate(dateStr) {
+  const d = new Date(dateStr);
+  return d.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric"
+  });
+}
+
+
+async function deleteAccount() {
+  const confirmDelete = confirm(
+    "⚠️ This will permanently delete your account and all data. Continue?"
+  );
+
+  if (!confirmDelete) return;
+
+  await fetch("http://localhost:5000/account/delete", {
+    method: "DELETE",
+    headers: authHeaders()
+  });
+
+  alert("Account deleted successfully");
+
+  localStorage.removeItem("token");
+  location.reload();
+}
+
+
+
+
+function logout() {
+  localStorage.removeItem("token");
+  location.reload();
+}
+
+
+
+
+
+
+</script>
+<div id="confirmBox" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4);">
+  <div style="
+    background:white;
+    width:300px;
+    margin:150px auto;
+    padding:20px;
+    border-radius:10px;
+    text-align:center;
+  ">
+    <p id="confirmText">Delete this file?</p>
+    <button onclick="confirmYes()">Yes</button>
+    <button onclick="confirmNo()">Cancel</button>
+  </div>
+</div>
+
+
+
+</div>
+</body>
+</html>
