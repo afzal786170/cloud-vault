@@ -102,6 +102,9 @@
 
 <script>
 
+  const API = "https://cloud-vault-backend.onrender.com";
+
+
     function authHeaders() {
   return {
     Authorization: "Bearer " + localStorage.getItem("token")
@@ -112,7 +115,7 @@ async function register() {
   const emailInput = document.getElementById("rEmail");
   const passwordInput = document.getElementById("rPassword");
 
-  const res = await fetch("https://cloud-vault-backend.onrender.com/register", {
+  const res = await fetch(`${API}/register`,  {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -168,7 +171,7 @@ async function upload() {
       data.append("file", file);
       data.append("path", file.webkitRelativePath || file.name);
 
-      xhr.open("POST", "https://cloud-vault-backend.onrender.com/upload");
+    xhr.open("POST", `${API}/upload`);
       xhr.setRequestHeader("Authorization", "Bearer " + localStorage.getItem("token"));
 
       xhr.upload.onprogress = (e) => {
@@ -239,7 +242,7 @@ async function stopRecording() {
     const data = new FormData();
     data.append("file", blob, "voice.webm");
 
-  const res = await fetch("https://cloud-vault-backend.onrender.com/upload", {
+  const res = await fetch(`${API}/upload`, {
   method: "POST",
   headers: authHeaders(),   // 👈 STEP 9
   body: data
@@ -258,7 +261,7 @@ loadLogs();    // ✅
 
 
 async function loadFiles() {
- const res = await fetch("http://cloud-vault-backend.onrender.com/files", {
+ const res = await fetch(`${API}/files`, {
   headers: authHeaders()   // 👈 STEP 9
 });
   const files = await res.json();
@@ -345,7 +348,7 @@ function deleteFile(public_id) {
 }
 
 async function confirmYes() {
- await fetch(`http://cloud-vault-backend.onrender.com/delete/${deleteTarget}`, {
+ await fetch(`${API}/delete/${deleteTarget}`, {
   method: "DELETE",
   headers: authHeaders()   // 👈 STEP 9
 });
@@ -373,7 +376,7 @@ async function uploadText() {
 
   if (!content) return alert("Write something first");
 
-  await fetch("http://cloud-vault-backend.onrender.com/text", {
+  await fetch(`${API}/text`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -388,7 +391,7 @@ async function uploadText() {
 
 
 async function loadTexts() {
-  const res = await fetch("http://cloud-vault-backend.onrender.com/texts", {
+  const res = await fetch(`${API}/texts`, {
     headers: authHeaders(),
     cache: "no-store"
   });
@@ -429,7 +432,7 @@ function copyText(text) {
 }
 
 async function deleteText(id) {
-  await fetch(`http://cloud-vault-backend.onrender.com/text/${id}`, {
+  await fetch(`${API}/text/${id}`, {
     method: "DELETE",
     headers: authHeaders()
   });
@@ -444,7 +447,7 @@ async function login() {
   const email = document.getElementById("email").value;
   const password = document.getElementById("password").value;
 
-  const res = await fetch("https://cloud-vault-backend.onrender.com/login", {
+  const res = await fetch(`${API}/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password })
@@ -486,7 +489,7 @@ if (localStorage.getItem("token")) {
 
 
 async function loadLogs() {
- const res = await fetch("http://cloud-vault-backend.onrender.com/logs", {
+ const res = await fetch(`${API}/logs`,  {
   headers: authHeaders()   // 👈 STEP 9
 });
 
@@ -513,7 +516,7 @@ async function clearLogs() {
   const confirmClear = confirm("Are you sure you want to clear all logs?");
   if (!confirmClear) return;
 
-  await fetch("http://cloud-vault-backend.onrender.com/logs/clear", {
+  await fetch(`${API}/logs/clear`, {
     method: "DELETE",
     headers: authHeaders()
   });
@@ -543,7 +546,7 @@ async function deleteAccount() {
 
   if (!confirmDelete) return;
 
-  await fetch("http://cloud-vault-backend.onrender.com/account/delete", {
+  await fetch(`${API}/account/delete`, {
     method: "DELETE",
     headers: authHeaders()
   });
